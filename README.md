@@ -23,7 +23,7 @@
 به Python 3.9 یا بالاتر نیاز دارید.
 
 ```bash
-git clone https://github.com/<username>/historydocuments-downloader.git
+git clone https://github.com/yousefalami/historydocumentsdownloader.git
 cd historydocuments-downloader
 pip install -r requirements.txt
 ```
