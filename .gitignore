@@ -1,0 +1,27 @@
+# خروجی دانلودها
+downloads/
+
+# فونت‌هایی که اسکریپت خودش دانلود می‌کند (اختیاری)
+Amiri-Bold.ttf
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# IDE / محیط
+.claude/
+.vscode/
+.idea/
+
+# سیستم‌عامل
+Thumbs.db
+.DS_Store
+
+# فایل‌های موقت
+*.log
+_tmp/
+_failed.tsv
