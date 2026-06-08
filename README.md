@@ -24,7 +24,7 @@
 
 ```bash
 git clone https://github.com/yousefalami/historydocumentsdownloader.git
-cd historydocuments-downloader
+cd historydocumentsdownloader
 pip install -r requirements.txt
 ```
 
