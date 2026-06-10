@@ -21,18 +21,34 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "downloads")
-FONT_PATH  = os.path.join(os.path.dirname(__file__), "Amiri-Regular.ttf")
-FONT_B     = os.path.join(os.path.dirname(__file__), "Amiri-Bold.ttf")
+BASE_DIR   = os.path.dirname(__file__)
+OUTPUT_DIR = os.path.join(BASE_DIR, "downloads")
 HEADERS    = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 SESSION    = requests.Session()
 SESSION.verify = False
 
+# مسیر فونت‌ها
+AMIRI_REGULAR   = os.path.join(BASE_DIR, "Amiri-Regular.ttf")
+AMIRI_BOLD      = os.path.join(BASE_DIR, "Amiri-Bold.ttf")
+NILOOFAR_PATH   = os.path.join(BASE_DIR, "XB-Niloofar.ttf")
+
+# فونت‌های قابل انتخاب: key -> (نام نمایشی, فایل regular, فایل bold یا None)
+FONTS = {
+    "1": ("Amiri",        AMIRI_REGULAR, AMIRI_BOLD),
+    "2": ("XB Niloofar",  NILOOFAR_PATH, None),
+}
+
+# تنظیمات فعال (پیش‌فرض = Amiri، اندازه‌ی پایه‌ی 10)
+ACTIVE_FONT  = "Amiri"      # نام رجیستر شده‌ی فونت معمولی
+ACTIVE_BOLD  = "AmiriB"     # نام رجیستر شده‌ی فونت توپر
+BASE_SIZE    = 10           # اندازه‌ی متن بدنه (پیش‌فرض فعلی)
+
 
 # ── فونت ──────────────────────────────────────────────────────────────────────
 
-def ensure_font():
-    if os.path.exists(FONT_PATH):
+def ensure_amiri():
+    """اگر Amiri نبود دانلودش کن"""
+    if os.path.exists(AMIRI_REGULAR):
         return
     print("Downloading Amiri font...")
     r = SESSION.get(
@@ -42,15 +58,48 @@ def ensure_font():
     z = zipfile.ZipFile(io.BytesIO(r.content))
     for name in z.namelist():
         if name.endswith("Amiri-Regular.ttf"):
-            open(FONT_PATH, "wb").write(z.read(name))
+            open(AMIRI_REGULAR, "wb").write(z.read(name))
         if name.endswith("Amiri-Bold.ttf"):
-            open(FONT_B, "wb").write(z.read(name))
+            open(AMIRI_BOLD, "wb").write(z.read(name))
     print("Font saved.")
 
 
-def register_fonts():
-    pdfmetrics.registerFont(TTFont("Amiri",  FONT_PATH))
-    pdfmetrics.registerFont(TTFont("AmiriB", FONT_B if os.path.exists(FONT_B) else FONT_PATH))
+def ensure_niloofar():
+    """اگر XB Niloofar نبود دانلودش کن"""
+    if os.path.exists(NILOOFAR_PATH):
+        return
+    print("Downloading XB Niloofar font...")
+    r = SESSION.get(
+        "https://raw.githubusercontent.com/sinamomken/tehran-thesis/master/font/XB%20Niloofar.ttf",
+        timeout=60
+    )
+    open(NILOOFAR_PATH, "wb").write(r.content)
+    print("Font saved.")
+
+
+def setup_font(choice: str):
+    """فونت انتخاب‌شده را آماده و رجیستر می‌کند و ACTIVE_* را تنظیم می‌کند"""
+    global ACTIVE_FONT, ACTIVE_BOLD
+    display, reg, bold = FONTS.get(choice, FONTS["1"])
+
+    if display == "Amiri":
+        ensure_amiri()
+    elif display == "XB Niloofar":
+        ensure_niloofar()
+
+    reg_name  = re.sub(r"\s+", "", display)        # مثلاً "XBNiloofar"
+    bold_name = reg_name + "B"
+
+    pdfmetrics.registerFont(TTFont(reg_name, reg))
+    if bold and os.path.exists(bold):
+        pdfmetrics.registerFont(TTFont(bold_name, bold))
+    else:
+        # فونت توپر جدا ندارد → از همان معمولی استفاده کن
+        pdfmetrics.registerFont(TTFont(bold_name, reg))
+
+    ACTIVE_FONT = reg_name
+    ACTIVE_BOLD = bold_name
+    print(f"Font set: {display}")
 
 
 # ── متن فارسی ─────────────────────────────────────────────────────────────────
@@ -263,8 +312,14 @@ def build_pdf(pdf_name: str, blocks: list, img_paths: list, out_path: str):
         c.line(left_x, y, right_x, y)
         y -= 4
 
+    # اندازه‌ها نسبت به BASE_SIZE مقیاس می‌شوند
+    body_size  = BASE_SIZE
+    h2_size    = BASE_SIZE + 2
+    title_size = BASE_SIZE + 4
+
     # عنوان
-    draw_block(pdf_name, "AmiriB", 14, 20, color=(0.08,0.24,0.47), bg=(0.93,0.95,0.98))
+    draw_block(pdf_name, ACTIVE_BOLD, title_size, title_size + 6,
+               color=(0.08,0.24,0.47), bg=(0.93,0.95,0.98))
     y -= 4
 
     for kind, text in blocks:
@@ -272,10 +327,10 @@ def build_pdf(pdf_name: str, blocks: list, img_paths: list, out_path: str):
             draw_hr()
         elif kind in ("h2","h3"):
             y -= 2
-            draw_block(text, "AmiriB", 12, 17, color=(0.08,0.24,0.47))
+            draw_block(text, ACTIVE_BOLD, h2_size, h2_size + 5, color=(0.08,0.24,0.47))
             y -= 1
         else:
-            draw_block(text, "Amiri", 10, 15)
+            draw_block(text, ACTIVE_FONT, body_size, body_size + 5)
             y -= 2
 
     # تصاویر
@@ -642,9 +697,35 @@ def run_retry_file(path: str):
         print("All retried successfully. Log removed.")
 
 
+def prompt_font_and_size():
+    """بعد از انتخاب حالت/لینک: فونت و اندازه را می‌پرسد و آماده می‌کند"""
+    global BASE_SIZE
+
+    # انتخاب فونت (پیش‌فرض: Amiri)
+    print("\nFont:")
+    for k, (name, _, _) in FONTS.items():
+        default = "  (default)" if name == "Amiri" else ""
+        print(f"  {k}) {name}{default}")
+    fchoice = input("Choose font [1/2] (Enter = 1): ").strip() or "1"
+    if fchoice not in FONTS:
+        fchoice = "1"
+    setup_font(fchoice)
+
+    # اندازه‌ی فونت (پیش‌فرض: 10)
+    raw = input(f"Font size (Enter = {BASE_SIZE}): ").strip()
+    if raw:
+        try:
+            val = int(raw)
+            if 6 <= val <= 40:
+                BASE_SIZE = val
+            else:
+                print(f"  out of range, using {BASE_SIZE}")
+        except ValueError:
+            print(f"  invalid, using {BASE_SIZE}")
+    print(f"Font size: {BASE_SIZE}\n")
+
+
 def main():
-    ensure_font()
-    register_fonts()
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     print("Modes:")
@@ -658,12 +739,15 @@ def main():
         path = input("Path to _failed.tsv [downloads/_failed.tsv]: ").strip()
         if not path:
             path = os.path.join(OUTPUT_DIR, "_failed.tsv")
+        prompt_font_and_size()
         run_retry_file(path)
         return
 
     url = input("URL: ").strip()
     if not url:
         return
+
+    prompt_font_and_size()
 
     if mode == "3":
         count = run_book_mode(url)
