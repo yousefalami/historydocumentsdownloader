@@ -13,7 +13,6 @@ venv/
 env/
 
 # IDE / محیط
-.claude/
 .vscode/
 .idea/
 
